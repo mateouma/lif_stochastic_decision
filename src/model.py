@@ -30,5 +30,13 @@ def intensity_match_linear_reset_mft(v, B=1, v_th=1, p=1):
     
     return B * np.sqrt(v) * x**p
 
+def gen_bg_noise(rate, dt, N, sim_len):
+    Nt = int(sim_len / dt)
+    spks = (np.random.rand(Nt, N) < (rate*dt))*1
+
+    return spks
+
+
+
 if __name__ == '__main__':
     pass

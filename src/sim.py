@@ -1,5 +1,5 @@
 import numpy as np
-from src.model import intensity
+from src.model import intensity, gen_bg_noise
 
 def sim_pif(J, E, tstop=100, dt=.01, B=1, v_th=1, p=1):
 
@@ -414,25 +414,36 @@ def sim_lif_receptor_perturbation(J, E, g_l, c_m, g_rec, tau_recep, Vc, EI_ratio
 
     v = np.zeros((Nt,N))
     v[0] = np.random.rand(N,)
+
     n = np.zeros(N,) # spikes
     spkind = []
-
     spktimes = []
+
+    C = np.zeros(N,)
+    C[:Ne] = c_m["e"]
+    C[Ne:] = c_m["i"]
+
+    g_L = np.zeros(N,)
+    g_L[:Ne] = g_l["e"]
+    g_L[Ne:] = g_l["i"]
 
     I_syn = np.zeros((Nt,N))
 
     I_ampa = np.zeros((Nt,N))
-    I_ampa[0] = np.random.rand(N,)
-
     I_nmda = np.zeros((Nt,N))
-    I_nmda[0] = np.random.rand(N,)
-
     I_gaba = np.zeros((Nt,N))
-    I_gaba[0] = np.random.rand(N,)
 
-    g_ampa = g_rec['ampa']
-    g_nmda = g_rec['nmda']
-    g_gaba = g_rec['gaba']
+    g_ampa = np.zeros(N,)
+    g_ampa[:Ne] = g_rec['ampa_e']
+    g_ampa[Ne:] = g_rec['ampa_i']
+
+    g_nmda = np.zeros(N,)
+    g_nmda[:Ne] = g_rec['nmda_e']
+    g_nmda[Ne:] = g_rec['nmda_i']
+
+    g_gaba = np.zeros(N,)
+    g_gaba[:Ne] = g_rec['gaba_e']
+    g_gaba[Ne:] = g_rec['gaba_i']
 
     s_ampa = np.zeros((Nt,Ne))
     s_ampa[0] = np.random.rand(Ne,)
@@ -451,7 +462,8 @@ def sim_lif_receptor_perturbation(J, E, g_l, c_m, g_rec, tau_recep, Vc, EI_ratio
     tau_nmda_decay = tau_recep['nmda_decay']
     tau_gaba = tau_recep['gaba']
 
-    Ve,Vi = Vc
+    Ve = Vc['e']
+    Vi = Vc['i']
 
     E = E0.copy()
 
@@ -468,11 +480,14 @@ def sim_lif_receptor_perturbation(J, E, g_l, c_m, g_rec, tau_recep, Vc, EI_ratio
         # v[t] = v[t-1] + dt*(-v[t-1] + E) - n*(v[t-1]-v_r) + J.dot(n)
         #v[t] = v[t-1] + (dt/tau_mem)*(-v[t-1] + E) + J.dot(n)
         I_syn[t-1] = I_ampa[t-1] + I_nmda[t-1] + I_gaba[t-1]
-        v[t] = v[t-1] + (dt/c_m)*(-g_l*(v[t-1] - E) - I_syn[t-1])
+        v[t] = v[t-1] + (dt/C)*(-g_L*(v[t-1] - E) - I_syn[t-1])
         v[t, spkind] = v_r # reset
 
         lam = intensity(v[t], B=B, v_th=v_th, p=p) # IF as a function of voltage
         lam[lam > 1/dt] = 1/dt
+
+        if np.sum(np.isnan(lam)) > 0:
+            print("NaNs detected")
             
         n = np.random.binomial(n=1, p=dt*lam) # probabilistic spike vector based on IF
 
@@ -480,9 +495,9 @@ def sim_lif_receptor_perturbation(J, E, g_l, c_m, g_rec, tau_recep, Vc, EI_ratio
         for i in spkind:
             spktimes.append([t*dt, i]) # spiking mechanism
 
-        I_ampa[t] = g_ampa * (v[t] - Ve) * (J[:,:Ne] @ s_ampa[t-1])
-        I_nmda[t] = g_nmda * (1 + np.exp((-0.062 * v[t]) / 3.57)) * (J[:,:Ne] @ s_nmda[t-1])
-        I_gaba[t] = g_gaba * (v[t] - Vi) * (J[:,Ne:] @ s_gaba[t-1])
+        I_ampa[t] = g_ampa * (v[t] - Ve) * (J[:,:Ne] @ s_ampa[t-1]) # incoming ampa currents
+        I_nmda[t] = g_nmda * (1 + np.exp((-0.062 * v[t]) / 3.57)) * (J[:,:Ne] @ s_nmda[t-1]) # incoming nmda currents
+        I_gaba[t] = g_gaba * (v[t] - Vi) * (J[:,Ne:] @ s_gaba[t-1]) # incoming gaba currents
 
         s_ampa[t] = s_ampa[t-1] - dt*((1/tau_ampa)*s_ampa[t-1]) + n[:Ne]# spikes here
         s_nmda[t] = s_nmda[t-1] - dt*((1/tau_nmda_decay)*s_nmda[t-1] + 0.5*x[t-1]*(1-s_nmda[t-1]))
@@ -498,12 +513,145 @@ def sim_lif_receptor_perturbation(J, E, g_l, c_m, g_rec, tau_recep, Vc, EI_ratio
     }
 
     syn_currents = {
+        "total": I_syn,
         "ampa": I_ampa,
         "nmda": I_nmda,
         "gaba": I_gaba
     }
 
-    return v, spktimes, I_syn, gating_vars
+    return v, spktimes, syn_currents, gating_vars
+
+def sim_determ_lif_recep_perturb(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, In_sens, tstop=100, dt=.01, v_th=1, v_r=0, perturb_start=None, perturb_len=10, perturb_amp=1.5, perturb_ind=None):
+    """
+    Simulate deterministic LIF network with receptor-specific currents
+    """
+    Nt = int(tstop / dt)
+
+    if len(J.shape) > 1:
+        N = J.shape[0]
+    else:
+        N = 1
+
+    if len(np.shape(E)) == 0:
+        E0 = E * np.ones(N,)
+    elif len(E) == N:
+        E0 = np.array(E)
+    else:
+        raise Exception("Need either a scalar or length N input E")
+
+    print(E0.shape)
+
+    Ne,Ni = EI_ratio
+
+    # background input noise (2.4 kHz spiking in XJW paper)
+    bg_spks = gen_bg_noise(2400, dt, N, tstop)
+
+    v = np.zeros((Nt, N))
+    v[0] = E0
+
+    spktrains = np.zeros((Nt,N))
+    spktimes = []
+
+    C = np.zeros(N,)
+    C[:Ne] = c_m["e"] # excitatory membrane capacitance
+    C[Ne:] = c_m["i"] # inhibitory membrane capacitance
+
+    g_L = np.zeros(N,)
+    g_L[:Ne] = g_l["e"] # excitatory leak conductance
+    g_L[Ne:] = g_l["i"] # inhibitory leak conductance
+
+    # incoming synaptic current into each neuron
+    I_syn = np.zeros((Nt,N)) 
+
+    I_ext_ampa = np.zeros((Nt,N))
+    I_ampa = np.zeros((Nt,N))
+    I_nmda = np.zeros((Nt,N))
+    I_gaba = np.zeros((Nt,N))
+
+    # external ampa conductances
+    g_ext_ampa = np.zeros(N,)
+    g_ext_ampa[:Ne] = g_ext['ampa_e']
+    g_ext_ampa[Ne:] = g_ext['ampa_i']
+
+    # recurrent receptor conductances into each neuron
+    g_ampa = np.zeros(N,)
+    g_ampa[:Ne] = g_rec['ampa_e']
+    g_ampa[Ne:] = g_rec['ampa_i']
+
+    g_nmda = np.zeros(N,)
+    g_nmda[:Ne] = g_rec['nmda_e']
+    g_nmda[Ne:] = g_rec['nmda_i']
+
+    g_gaba = np.zeros(N,)
+    g_gaba[:Ne] = g_rec['gaba_e']
+    g_gaba[Ne:] = g_rec['gaba_i']
+
+    # gating variables
+    s_ext_ampa = np.zeros((Nt,N))
+    s_ampa = np.zeros((Nt,Ne))
+    s_nmda = np.zeros((Nt,Ne))
+    s_gaba = np.zeros((Nt,Ni))
+    
+    x = np.zeros((Nt,Ne))
+    x[0] = np.random.rand(Ne,)
+
+    # time constants
+    tau_ampa = tau_recep['ampa']
+    tau_nmda_rise = tau_recep['nmda_rise']
+    tau_nmda_decay = tau_recep['nmda_decay']
+    tau_gaba = tau_recep['gaba']
+
+    Ve = Vc['e']
+    Vi = Vc['i']
+
+    E = E0.copy()
+
+    for t in range(1, Nt):
+        # forward euler loop
+
+        # voltage update
+        v[t] = v[t-1] + (dt / C) * (-g_L * (v[t-1] - E) - I_syn[t-1])
+
+        # check spikes, don't update voltage yet
+        spkind, = np.where(v[t] >= v_th)
+        for i in spkind:
+            spktimes.append([t*dt, i]) # spiking mechanism
+        n = np.zeros(N,) # which neurons spiked
+        n[spkind] = 1
+        spktrains[t,:] = n
+
+        # gating variables
+        s_ext_ampa[t] = s_ext_ampa[t-1] + dt*((-1/tau_ampa)*s_ext_ampa[t-1]) + bg_spks[t-1] + In_sens[t-1]
+        s_ampa[t] = s_ampa[t-1] + dt*((-1/tau_ampa)*s_ampa[t-1]) + n[:Ne]
+        x[t] = x[t-1] + dt*((-1/tau_nmda_rise)*x[t-1]) + n[:Ne]
+        s_nmda[t] = s_nmda[t-1] + dt*((-1/tau_nmda_decay)*s_nmda[t-1] + 0.5*x[t]*(1-s_nmda[t-1]))
+        s_gaba[t] = s_gaba[t-1] + dt*((-1/tau_gaba)*s_gaba[t-1]) + n[Ne:]
+
+        # incoming synaptic currents
+        I_ext_ampa[t] = g_ext_ampa * (v[t] - Ve) * s_ext_ampa[t]
+        I_ampa[t] = g_ampa * (v[t] - Ve) * (J[:,:Ne] @ s_ampa[t])
+        I_nmda[t] = ((g_nmda * (v[t] - Ve)) / (1 + (np.exp(-0.062 * v[t]) / 3.57))) * (J[:,:Ne] @ s_nmda[t])
+        I_gaba[t] = g_gaba * (v[t] - Vi) * (J[:,Ne:] @ s_gaba[t])
+        I_syn[t] = I_ext_ampa[t] + I_ampa[t] + I_nmda[t] + I_gaba[t]
+
+        v[t,spkind] = v_r
+    
+    gating_vars = {
+        'ext_ampa': s_ext_ampa,
+        'ampa': s_ampa,
+        'nmda': s_nmda,
+        'gaba': s_gaba
+    }
+
+    syn_currents = {
+        'total': I_syn,
+        'ext_ampa': I_ext_ampa,
+        'ampa': I_ampa,
+        'nmda': I_nmda,
+        'gaba': I_gaba
+    }
+
+    return v, np.array(spktimes), spktrains, syn_currents, gating_vars
 
 def create_spike_train(spktimes, neuron=0, dt=.01, tstop=100):
     
