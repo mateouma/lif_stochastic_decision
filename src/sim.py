@@ -593,7 +593,6 @@ def sim_determ_lif_recep_perturb(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI
     s_gaba = np.zeros((Nt,Ni))
     
     x = np.zeros((Nt,Ne))
-    x[0] = np.random.rand(Ne,)
 
     # time constants
     tau_ampa = tau_recep['ampa']
@@ -624,12 +623,12 @@ def sim_determ_lif_recep_perturb(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI
         s_ext_ampa[t] = s_ext_ampa[t-1] + dt*((-1/tau_ampa)*s_ext_ampa[t-1]) + bg_spks[t-1] + In_sens[t-1]
         s_ampa[t] = s_ampa[t-1] + dt*((-1/tau_ampa)*s_ampa[t-1]) + n[:Ne]
         x[t] = x[t-1] + dt*((-1/tau_nmda_rise)*x[t-1]) + n[:Ne]
-        s_nmda[t] = s_nmda[t-1] + dt*((-1/tau_nmda_decay)*s_nmda[t-1] + 0.5*x[t]*(1-s_nmda[t-1]))
+        s_nmda[t] = s_nmda[t-1] + dt*((-1/tau_nmda_decay)*s_nmda[t-1] + 500*x[t]*(1-s_nmda[t-1]))
         s_gaba[t] = s_gaba[t-1] + dt*((-1/tau_gaba)*s_gaba[t-1]) + n[Ne:]
 
         # incoming synaptic currents
         I_ext_ampa[t] = g_ext_ampa * (v[t] - Ve) * s_ext_ampa[t]
-        I_ampa[t] = g_ampa * (v[t] - Ve) * (J[:,:Ne] @ s_ampa[t])
+        I_ampa[t] = g_ampa * (v[t] - Ve) * (J[:,:Ne] @ s_ampa[t]) # matrix multiplication = excitatory to all other neurons
         I_nmda[t] = ((g_nmda * (v[t] - Ve)) / (1 + (np.exp(-0.062 * v[t]) / 3.57))) * (J[:,:Ne] @ s_nmda[t])
         I_gaba[t] = g_gaba * (v[t] - Vi) * (J[:,Ne:] @ s_gaba[t])
         I_syn[t] = I_ext_ampa[t] + I_ampa[t] + I_nmda[t] + I_gaba[t]
