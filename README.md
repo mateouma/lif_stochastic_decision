@@ -1,7 +1,3 @@
-# Dynamics of stochastic integrate-and-fire networks.
-This repository contains code associated with the above paper. 
+# Decision-making cortical circuit dynamics
 
-Each script in "scripts" holds functions to reproduce figures. "plot_uncoupled" has code associated with Figure 1.
-"plot_single_pop.py" has code for Figure 2. "plot_exc_inh.py" has code to reproduce Figures 3, 5, and 6. "plot_fluctuations.py" has code to reproduce Figure 4.
-
-Before running a script, make sure to update the project root directory at the top of the file.
+This repository builds upon Wang 2002, _Probabilistic decision making by slow reverberation in cortical circuits_ and Ocker 2023, _Dynamics of Stochastic Integrate-and-Fire Networks_ to model the dynamics of cortical networks during decision making. This project also attempts to add interneuron classes into the stochastic LIF models and uncover their roles in decision-making computation. This is done under the mentorship of Dr. Gabriel Koch Ocker and Dr. Chandramouli Chandrasekaran
