@@ -1,5 +1,5 @@
 import numpy as np
-from src.model import intensity, gen_bg_noise
+from src.model import intensity
 
 def sim_pif(J, E, tstop=100, dt=.01, B=1, v_th=1, p=1):
 
@@ -521,7 +521,13 @@ def sim_lif_receptor_perturbation(J, E, g_l, c_m, g_rec, tau_recep, Vc, EI_ratio
 
     return v, spktimes, syn_currents, gating_vars
 
-def sim_determ_lif_recep_perturb(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, In_sens, tstop=100, dt=.01, v_th=1, v_r=0, perturb_start=None, perturb_len=10, perturb_amp=1.5, perturb_ind=None):
+def gen_bg_noise(rate, dt, N, sim_len):
+    Nt = int(sim_len / dt)
+    spks = (np.random.rand(Nt, N) < (rate*dt))*1
+
+    return spks
+
+def sim_determ_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, In_sens, bg_spks, tstop=100, dt=.01, v_th=1, v_r=0, perturb_start=None, perturb_len=10, perturb_amp=1.5, perturb_ind=None):
     """
     Simulate deterministic LIF network with receptor-specific currents
     """
@@ -539,12 +545,9 @@ def sim_determ_lif_recep_perturb(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI
     else:
         raise Exception("Need either a scalar or length N input E")
 
-    print(E0.shape)
+    print(f"Simulating network of {E0.size} neurons")
 
     Ne,Ni = EI_ratio
-
-    # background input noise (2.4 kHz spiking in XJW paper)
-    bg_spks = gen_bg_noise(2400, dt, N, tstop)
 
     v = np.zeros((Nt, N))
     v[0] = E0
@@ -623,7 +626,7 @@ def sim_determ_lif_recep_perturb(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI
         s_ext_ampa[t] = s_ext_ampa[t-1] + dt*((-1/tau_ampa)*s_ext_ampa[t-1]) + bg_spks[t-1] + In_sens[t-1]
         s_ampa[t] = s_ampa[t-1] + dt*((-1/tau_ampa)*s_ampa[t-1]) + n[:Ne]
         x[t] = x[t-1] + dt*((-1/tau_nmda_rise)*x[t-1]) + n[:Ne]
-        s_nmda[t] = s_nmda[t-1] + dt*((-1/tau_nmda_decay)*s_nmda[t-1] + 500*x[t]*(1-s_nmda[t-1]))
+        s_nmda[t] = s_nmda[t-1] + dt*((-1/tau_nmda_decay)*s_nmda[t-1] + 500*x[t-1]*(1-s_nmda[t-1]))
         s_gaba[t] = s_gaba[t-1] + dt*((-1/tau_gaba)*s_gaba[t-1]) + n[Ne:]
 
         # incoming synaptic currents
@@ -651,6 +654,53 @@ def sim_determ_lif_recep_perturb(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI
     }
 
     return v, np.array(spktimes), spktrains, syn_currents, gating_vars
+
+def gen_sensory_stim(mu_0=20, sigma=4.0, dt=None, rho=None, coh=None, f=0.15, N=2000, sim_len=4, stim_len=0.5, t_start=1):
+    """
+    Generate stimulus rates across time for Ns seconds. Rates are resampled every 50 ms.
+    """
+    if len(np.shape(rho)) > 0:
+        rho_A,rho_B = rho
+    else:
+        rho_A = mu_0 / 100
+        rho_B = mu_0 / 100
+    mu_A = mu_0 + rho_A*coh
+    mu_B = mu_0 - rho_B*coh
+
+    print(f"A mean rate: {mu_A} Hz")
+    print(f"B mean rate: {mu_B} Hz")
+    print(f"Stimulation length: {stim_len} s")
+
+    fNe = int(f * N * 0.8) # number of selective neurons
+
+    Nt = int(sim_len / dt) # time points
+
+    switch_idx = int(0.05 / dt) # every 50 ms
+    num_switches = int((stim_len / dt) / switch_idx)
+
+    stim_A_rate_list = np.random.normal(loc=mu_A, scale=sigma, size=num_switches)
+    stim_B_rate_list = np.random.normal(loc=mu_B, scale=sigma, size=num_switches)
+    
+    stim_rates = np.zeros((Nt, N))
+    stim_rates_A = np.zeros(Nt)
+    stim_rates_B = np.zeros(Nt)
+
+    stim_spikes = np.zeros((Nt, N))
+    fNe2 = int(2*fNe)
+
+    for i in range(num_switches):
+        swi = int(i*switch_idx + (t_start / dt))
+        
+        stim_rates_A[swi:(swi+switch_idx)] = stim_A_rate_list[i]
+        stim_rates_B[swi:(swi+switch_idx)] = stim_B_rate_list[i]
+
+        stim_spikes[swi:(swi+switch_idx),:fNe] = (np.random.rand(switch_idx,fNe) < (stim_A_rate_list[i] * dt))*1
+        stim_spikes[swi:(swi+switch_idx),fNe:fNe2] = (np.random.rand(switch_idx,fNe) < (stim_B_rate_list[i] * dt))*1
+
+    stim_rates[:,:fNe] = stim_rates_A[:,np.newaxis].repeat([fNe], axis=1)
+    stim_rates[:,fNe:fNe2] = stim_rates_B[:,np.newaxis].repeat([fNe], axis=1)
+
+    return stim_rates, stim_spikes
 
 def create_spike_train(spktimes, neuron=0, dt=.01, tstop=100):
     
