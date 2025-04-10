@@ -13,7 +13,7 @@ from src.model import intensity, intensity_match_linear_reset_mft
 from src.theory import lif_linear_full_fI, lif_linear_1loop_fI
 from src.sim import sim_lif_pop, create_spike_train
 
-from plot_fluctuations import calc_avg_spectrum
+from .plot_fluctuations import calc_avg_spectrum
 
 fontsize = 10
 labelsize = 9
@@ -21,7 +21,7 @@ labelsize = 9
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 colors = ['k']+colors
 
-root_dir = '/Users/gkocker/Documents/projects/lif_stochastic'
+root_dir = r'\Users\Mateo\Documents\BU\ocker group\lif_stochastic_decision'
 results_dir = os.path.join(root_dir, 'results')
 
 

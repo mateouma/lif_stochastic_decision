@@ -18,7 +18,7 @@ labelsize = 9
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 colors = ['k']+colors
 
-root_dir = '/Users/gkocker/Documents/projects/lif_stochastic'
+root_dir = r'\Users\Mateo\Documents\BU\ocker group\lif_stochastic_decision'
 results_dir = os.path.join(root_dir, 'results')
 
 
