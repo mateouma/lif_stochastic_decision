@@ -61,7 +61,7 @@ def create_connect_mat(Ne, Ni, f, wstrong, sparse_prob=None, plot=False):
 
     if plot:
         fig, ax = plt.subplots()
-        pmat = ax.imshow(Jmat, cmap='Reds', interpolation='nearest')
+        pmat = ax.imshow(Jmat, vmin=0, cmap='Reds', interpolation='nearest')
         fig.colorbar(pmat, ax=ax)
 
         plt.show()

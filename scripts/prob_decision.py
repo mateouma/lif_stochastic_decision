@@ -36,7 +36,7 @@ def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None
 
     Vc = {'e': 0, 'i': -70} # E/I target voltages
 
-    if Jmat == None:
+    if Jmat is None:
         # weight matrix (fully connected)
         Jmat = create_connect_mat(Ne, Ni, f, wstrong, sparse_prob=sparse_prob)
 
@@ -68,11 +68,13 @@ def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None
 
     dec_thres = 15
     if np.sum(choice_fr > dec_thres) > 0:
-        reaction_time = np.min(np.where(choice_fr > dec_thres)) * (tstop / len(choice_fr))
+        reaction_time = np.min(np.where(choice_fr > dec_thres)) * (tstop / len(choice_fr)) - 1
     else:
-        reaction_time = 'no decision met'
+        reaction_time = np.inf
     # reaction_time = np.min(np.where(choice_fr > dec_thres)) * (tstop/len(choice_fr))
     tplot_rt = np.linspace(0,tstop,len(choice_fr))
+
+    print(f"Reaction time: {reaction_time} seconds")
 
     # plotting
     fig, ax = plt.subplots(2,2)
@@ -82,13 +84,13 @@ def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None
     ax[0,0].set_yticks([fNe, fNe2, Ne, N])
 
     # plot sensory input
-    ax[0,1].plot(tplot, stim_rates[:,0], color='r')
-    ax[0,1].plot(tplot, stim_rates[:,400], color='g')
+    ax[0,1].plot(tplot, stim_rates[:,(fNe-10)], color='r')
+    ax[0,1].plot(tplot, stim_rates[:,(fNe2-10)], color='g')
     
     # plot spike times of selective populations
     ax[1,0].plot(spktimes[:,0], spktimes[:,1], 'k|', markersize=0.5)
     ax[1,0].vlines(0.0, ymin=0, ymax=fNe, color='r')
-    ax[1,0].vlines(0.0, ymin=240, ymax=fNe2, color='g')
+    ax[1,0].vlines(0.0, ymin=fNe, ymax=fNe2, color='g')
     ax[1,0].set_ylim((0,fNe2))
 
     # plot firing rates

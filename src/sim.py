@@ -1,5 +1,6 @@
 import numpy as np
 from src.model import intensity
+from tqdm.notebook import tqdm
 
 def sim_pif(J, E, tstop=100, dt=.01, B=1, v_th=1, p=1):
 
@@ -608,7 +609,7 @@ def sim_determ_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, 
 
     E = E0.copy()
 
-    for t in range(1, Nt):
+    for t in tqdm(range(1, Nt)):
         # forward euler loop
 
         # voltage update
@@ -669,7 +670,7 @@ def gen_sensory_stim(mu_0=20, sigma=4.0, dt=None, rho=None, coh=None, f=0.15, N=
 
     print(f"A mean rate: {mu_A} Hz")
     print(f"B mean rate: {mu_B} Hz")
-    print(f"Stimulation length: {stim_len} s")
+    print(f"Stimulation length: {stim_len} seconds")
 
     fNe = int(f * N * 0.8) # number of selective neurons
 
