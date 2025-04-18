@@ -464,11 +464,11 @@ def sim_determ_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, 
         n[t,spkind] = 1
 
         # gating variables
-        s_ext_ampa[t] = s_ext_ampa[t-1] + dt*((-1/tau_ampa)*s_ext_ampa[t-1]) + bg_spks[t-1] + In_sens[t-1]
-        s_ampa[t] = s_ampa[t-1] + dt*((-1/tau_ampa)*s_ampa[t-1]) + n[t,:Ne]
-        x[t] = x[t-1] + dt*((-1/tau_nmda_rise)*x[t-1]) + n[t,:Ne]
-        s_nmda[t] = s_nmda[t-1] + dt*((-1/tau_nmda_decay)*s_nmda[t-1] + 500*x[t-1]*(1-s_nmda[t-1]))
-        s_gaba[t] = s_gaba[t-1] + dt*((-1/tau_gaba)*s_gaba[t-1]) + n[t,Ne:]
+        s_ext_ampa[t] = s_ext_ampa[t-1] + dt*(-s_ext_ampa[t-1]/tau_ampa) + bg_spks[t-1] + In_sens[t-1]
+        s_ampa[t] = s_ampa[t-1] + dt*(-s_ampa[t-1]/tau_ampa) + n[t,:Ne]
+        x[t] = x[t-1] + dt*(-x[t-1]/tau_nmda_rise) + n[t,:Ne]
+        s_nmda[t] = s_nmda[t-1] + dt*(-s_nmda[t-1]/tau_nmda_decay + 500*x[t-1]*(1-s_nmda[t-1]))
+        s_gaba[t] = s_gaba[t-1] + dt*(-s_gaba[t-1]/tau_gaba) + n[t,Ne:]
 
         # incoming synaptic currents
         I_ext_ampa[t] = g_ext_ampa * (v[t] - Ve) * s_ext_ampa[t]
@@ -720,15 +720,13 @@ def sim_stoch_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, I
     E = E0.copy() 
     n = np.zeros((Nt, N)) # spike trains
 
-    spkind = []
-
     # forward euler loop
     for t in tqdm(range(1, Nt)):
         # voltage update
         v[t] = v[t-1] + (dt / C) * (-g_L * (v[t-1] - E) - I_syn[t-1])
 
         # point process IF
-        lam = intensity(v[t], B=1, v_th=v_th, p=1)
+        lam = intensity(v[t], B=1000, v_th=v_th, p=1)
         lam[lam > 1/dt] = 1/dt
 
         # stochastic spiking
@@ -738,7 +736,7 @@ def sim_stoch_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, I
         # gating variables
         s_ext_ampa[t] = s_ext_ampa[t-1] + dt*(-s_ext_ampa[t-1]/tau_ampa) + bg_spks[t-1] + In_sens[t-1]
         s_ampa[t] = s_ampa[t-1] + dt*(-s_ampa[t-1]/tau_ampa) + n[t,:Ne]
-        x[t] = x[t-1] + dt*((-1/tau_nmda_rise)*x[t-1]) + n[t,:Ne]
+        x[t] = x[t-1] + dt*(-x[t-1]/tau_nmda_rise) + n[t,:Ne]
         s_nmda[t] = s_nmda[t-1] + dt*(-s_nmda[t-1]/tau_nmda_decay + 500*x[t-1]*(1-s_nmda[t-1]))
         s_gaba[t] = s_gaba[t-1] + dt*(-s_gaba[t-1]/tau_gaba) + n[t,Ne:]
 
