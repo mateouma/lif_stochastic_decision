@@ -10,7 +10,7 @@ from src.sim import sim_determ_lif_recep, gen_sensory_stim, gen_bg_noise
 root_dir = r'\Users\Mateo\Documents\BU\ocker group\lif_stochastic_decision'
 results_dir = os.path.join(root_dir, 'results')
 
-def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None, Jmat=None, save=False):
+def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None, Jmat=None, sim_func=sim_determ_lif_recep, save=False):
     E = -70
     v_th = -50
     v_r = -55
@@ -47,7 +47,7 @@ def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None
     bg_spks = gen_bg_noise(2400, dt, N, tstop)
 
     # simulate spiking network
-    v, spktimes, spktrains, syn_currents, gating_vars = sim_determ_lif_recep(J=Jmat, E=E, g_l=g_l, c_m=c_m, g_ext=g_ext, g_rec=g_rec, tau_recep=tau_recep, Vc=Vc, EI_ratio=(Ne,Ni), In_sens=stim_spikes, bg_spks=bg_spks, tstop=tstop, dt=dt, v_th=v_th, v_r=v_r)
+    v, spktimes, spktrains, syn_currents, gating_vars = sim_func(J=Jmat, E=E, g_l=g_l, c_m=c_m, g_ext=g_ext, g_rec=g_rec, tau_recep=tau_recep, Vc=Vc, EI_ratio=(Ne,Ni), In_sens=stim_spikes, bg_spks=bg_spks, tstop=tstop, dt=dt, v_th=v_th, v_r=v_r)
 
     # plotting rates
     sum_spks_A = spktrains[:,:fNe].sum(axis=1) # sel for A
@@ -80,7 +80,8 @@ def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None
     fig, ax = plt.subplots(2,2)
 
     # plot all spikes, edit out later
-    ax[0,0].plot(spktimes[:,0], spktimes[:,1], 'k|', markersize=0.5)
+    if len(spktimes) > 0:
+        ax[0,0].plot(spktimes[:,0], spktimes[:,1], 'k|', markersize=0.5)
     ax[0,0].set_yticks([fNe, fNe2, Ne, N])
 
     # plot sensory input
@@ -88,7 +89,8 @@ def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None
     ax[0,1].plot(tplot, stim_rates[:,(fNe2-10)], color='g')
     
     # plot spike times of selective populations
-    ax[1,0].plot(spktimes[:,0], spktimes[:,1], 'k|', markersize=0.5)
+    if len(spktimes) > 0:
+        ax[1,0].plot(spktimes[:,0], spktimes[:,1], 'k|', markersize=0.5)
     ax[1,0].vlines(0.0, ymin=0, ymax=fNe, color='r')
     ax[1,0].vlines(0.0, ymin=fNe, ymax=fNe2, color='g')
     ax[1,0].set_ylim((0,fNe2))
@@ -98,7 +100,6 @@ def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None
     ax[1,1].plot(tplot_rt, firing_rate_B, color='g')
     ax[1,1].axhline(15, linewidth='0.7', color='k', linestyle='--')
     ax[1,1].set_ylim((0,np.max(choice_fr)+5))
-
 
     fig.tight_layout()
 

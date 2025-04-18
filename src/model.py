@@ -50,7 +50,7 @@ def create_connect_mat(Ne, Ni, f, wstrong, sparse_prob=None, plot=False):
     Jmat[:fNe, fNe:(2*fNe)] = wweak # from selective B to selective A
     Jmat[:(2*fNe),(2*fNe):Ne] = wweak # from nonselective to selective
 
-    Jmat[:,Ne:] = 1 # from inhibitory to all else
+    Jmat[:,Ne:] = 2 # from inhibitory to all else
 
     # Jmat_max = np.max(np.abs(Jmat))
 
