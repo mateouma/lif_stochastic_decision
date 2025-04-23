@@ -371,7 +371,7 @@ def gen_bg_noise(rate, dt, N, sim_len):
 
     return spks
 
-def sim_determ_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, In_sens, bg_spks, tstop=100, dt=.01, v_th=1, v_r=0, perturb_start=None, perturb_len=10, perturb_amp=1.5, perturb_ind=None):
+def sim_determ_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, sens_evidence, bg_spks, tstop=100, dt=.01, v_th=1, v_r=0, perturb_start=None, perturb_len=10, perturb_amp=1.5, perturb_ind=None):
     """
     Simulate deterministic LIF network with receptor-specific currents
     """
@@ -453,6 +453,8 @@ def sim_determ_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, 
     E = E0.copy() 
     n = np.zeros((Nt, N)) # spike trains
 
+    ext_input = bg_spks + sens_evidence
+
     for t in tqdm(range(1, Nt)):
         # forward euler loop
 
@@ -460,11 +462,12 @@ def sim_determ_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, 
         v[t] = v[t-1] + (dt / C) * (-g_L * (v[t-1] - E) - I_syn[t-1])
 
         # check spikes, don't update voltage yet
-        spkind, = np.where(v[t] >= v_th)
+        #spkind, = np.where(v[t] >= v_th)
+        spkind = (v[t] >= v_th)
         n[t,spkind] = 1
 
         # gating variables
-        s_ext_ampa[t] = s_ext_ampa[t-1] + dt*(-s_ext_ampa[t-1]/tau_ampa) + bg_spks[t-1] + In_sens[t-1]
+        s_ext_ampa[t] = s_ext_ampa[t-1] + dt*(-s_ext_ampa[t-1]/tau_ampa) + ext_input[t-1]
         s_ampa[t] = s_ampa[t-1] + dt*(-s_ampa[t-1]/tau_ampa) + n[t,:Ne]
         x[t] = x[t-1] + dt*(-x[t-1]/tau_nmda_rise) + n[t,:Ne]
         s_nmda[t] = s_nmda[t-1] + dt*(-s_nmda[t-1]/tau_nmda_decay + 500*x[t-1]*(1-s_nmda[t-1]))
@@ -642,7 +645,7 @@ def sim_determ_lif_recep_simp(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ra
 
     return v, spktimes, n, syn_currents, None
 
-def sim_stoch_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, In_sens, bg_spks, tstop=100, dt=.01, v_th=1, v_r=0):
+def sim_stoch_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, sens_evidence, bg_spks, tstop=100, dt=.01, v_th=1, v_r=0):
     """
     Simulate stochastic LIF network with receptor-specific synaptic currents
     """
@@ -720,6 +723,8 @@ def sim_stoch_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, I
     E = E0.copy() 
     n = np.zeros((Nt, N)) # spike trains
 
+    ext_input = bg_spks + sens_evidence
+
     # forward euler loop
     for t in tqdm(range(1, Nt)):
         # voltage update
@@ -731,10 +736,10 @@ def sim_stoch_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, I
 
         # stochastic spiking
         n[t] = np.random.binomial(n=1, p=dt*lam)
-        spkind, = np.where(n[t] > 0)
+        #spkind, = np.where(n[t] > 0)
 
         # gating variables
-        s_ext_ampa[t] = s_ext_ampa[t-1] + dt*(-s_ext_ampa[t-1]/tau_ampa) + bg_spks[t-1] + In_sens[t-1]
+        s_ext_ampa[t] = s_ext_ampa[t-1] + dt*(-s_ext_ampa[t-1]/tau_ampa) + ext_input[t-1]
         s_ampa[t] = s_ampa[t-1] + dt*(-s_ampa[t-1]/tau_ampa) + n[t,:Ne]
         x[t] = x[t-1] + dt*(-x[t-1]/tau_nmda_rise) + n[t,:Ne]
         s_nmda[t] = s_nmda[t-1] + dt*(-s_nmda[t-1]/tau_nmda_decay + 500*x[t-1]*(1-s_nmda[t-1]))
@@ -748,7 +753,7 @@ def sim_stoch_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, I
         I_syn[t] = I_ext_ampa[t] + I_ampa[t] + I_nmda[t] + I_gaba[t]
 
         # voltage reset
-        v[t,spkind] = v_r
+        v[t,n[t] > 0] = v_r
         
     
     spktimes = np.array(np.where(n), dtype=float).T
@@ -770,102 +775,6 @@ def sim_stoch_lif_recep(J, E, g_l, c_m, g_ext, g_rec, tau_recep, Vc, EI_ratio, I
     }
 
     return v, spktimes, n, syn_currents, gating_vars
-
-def sim_slif(J, E, tstop, dt, v_th=1, v_r=0, v_e=2, v_i=-0.5, C=1, g_L=1, g_syn=None, dale_ratio=0.8, spk_inputs=None):
-    '''
-    Simulate a stochastic EI-LIF network with synaptic currents
-    '''
-    Nt = int(tstop / dt) # time points
-    N = np.shape(J)[0] # number of neurons
-    Ne = int(dale_ratio * N)
-    Ni = N - Ne
-
-    E0 = E * np.ones(N,) # resting potential
-    E = E0.copy() # resting potential copy
-
-    v = np.zeros((Nt,N)) # voltage
-    v[0] = E # initial resting potential
-
-    n = np.zeros((Nt,N)) # spikes
-
-    # synaptic time constants
-    tau_ampa = 0.002
-    tau_nmda_rise = 0.002
-    tau_nmda_decay = 0.100
-    tau_gaba = 0.005
-
-    # gating variables
-    s_ext_ampa = np.zeros((Nt,N))
-    s_ampa = np.zeros((Nt,Ne))
-    x = np.zeros((Nt,Ne))
-    s_nmda = np.zeros((Nt,Ne))
-    s_gaba = np.zeros((Nt,Ni))
-
-    # synaptic conductances
-    if g_syn == None:
-        g_ext_ampa = 1
-        g_ampa = 1
-        g_nmda = 1
-        g_gaba = 1
-    else:
-        g_ext_ampa = g_syn['ext_ampa']
-        g_ampa = g_syn['ampa']
-        g_nmda = g_syn['nmda']
-        g_gaba = g_syn['gaba']
-    
-    # synpatic currents
-    I_syn = np.zeros((Nt,N))
-    I_ext_ampa = np.zeros_like(I_syn)
-    I_ampa = np.zeros_like(I_syn)
-    I_nmda = np.zeros_like(I_syn)
-    I_gaba = np.zeros_like(I_syn)
-
-    for t in tqdm(range(1,Nt)):
-        v[t] = v[t-1] + (dt / C) * (-g_L * (v[t-1] - E) - I_syn[t-1])
-        
-        # gating variables
-        s_ext_ampa[t] = s_ext_ampa[t-1] + dt*(-s_ext_ampa[t-1]/tau_ampa) + spk_inputs[t-1]
-        s_ampa[t] = s_ampa[t-1] + dt*(-s_ampa[t-1]/tau_ampa) + n[t-1,:Ne]
-        x[t] = x[t-1] + dt*((-1/tau_nmda_rise)*x[t-1]) + n[t-1,:Ne]
-        s_nmda[t] = s_nmda[t-1] + dt*((-s_nmda[t-1]/tau_nmda_decay) + 500*x[t-1]*(1-s_nmda[t-1]))
-        s_gaba[t] = s_gaba[t-1] + dt*(-s_gaba[t-1]/tau_gaba) + n[t-1,Ne:]
-
-        # incoming synaptic currents
-        I_ext_ampa[t] = g_ext_ampa * (v[t] - v_e) * s_ext_ampa[t]
-        I_ampa[t] = g_ampa * (v[t] - v_e) * (J[:,:Ne] @ s_ampa[t]) # matrix multiplication = excitatory to all other neurons
-        I_nmda[t] = ((g_nmda * (v[t] - v_e)) / (1 + (np.exp(-0.062 * v[t]) / 3.57))) * (J[:,:Ne] @ s_nmda[t])
-        I_gaba[t] = g_gaba * (v[t] - v_i) * (J[:,Ne:] @ s_gaba[t])
-        I_syn[t] = I_ext_ampa[t] + I_ampa[t] + I_nmda[t] + I_gaba[t]
-
-        # stochastic spiking mechanism
-        v[t,spkind] = v_r
-
-        lam = intensity(v[t], B=1, v_th=v_th, p=1)
-        lam[lam > 1/dt] = 1/dt
-
-        n[t] = np.random.binomial(n=1, p=dt*lam)
-        spkind, = np.where(n > 0)
-
-    spktimes = np.array(np.where(n), dtype=float).T
-    spktimes[:,0] *= dt
-
-    gating_vars = {
-        'ext_ampa': s_ext_ampa,
-        'ampa': s_ampa,
-        'nmda': s_nmda,
-        'gaba': s_gaba
-    }
-
-    syn_currents = {
-        'total': I_syn,
-        'ext_ampa': I_ext_ampa,
-        'ampa': I_ampa,
-        'nmda': I_nmda,
-        'gaba': I_gaba
-    }
-        
-    return v, spktimes, n, syn_currents, gating_vars
-
 
 def gen_sensory_stim(mu_0=20, sigma=4.0, dt=None, rho=None, coh=None, f=0.15, N=2000, sim_len=4, stim_len=0.5, t_start=1):
     """

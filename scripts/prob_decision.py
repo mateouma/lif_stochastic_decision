@@ -22,7 +22,7 @@ def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None
     wstrong = 1.7
 
     tstop = 4
-    dt = 0.0001
+    dt = 2e-5
     tplot = np.arange(0,tstop,dt)
 
     g_l = {'e': 25, 'i': 20} # E/I leak conductances
@@ -47,7 +47,7 @@ def produce_prob_decision(mu_0, coh, stim_len, Ne=1600, Ni=400, sparse_prob=None
     bg_spks = gen_bg_noise(2400, dt, N, tstop)
 
     # simulate spiking network
-    v, spktimes, spktrains, syn_currents, gating_vars = sim_func(J=Jmat, E=E, g_l=g_l, c_m=c_m, g_ext=g_ext, g_rec=g_rec, tau_recep=tau_recep, Vc=Vc, EI_ratio=(Ne,Ni), In_sens=stim_spikes, bg_spks=bg_spks, tstop=tstop, dt=dt, v_th=v_th, v_r=v_r)
+    v, spktimes, spktrains, syn_currents, gating_vars = sim_func(J=Jmat, E=E, g_l=g_l, c_m=c_m, g_ext=g_ext, g_rec=g_rec, tau_recep=tau_recep, Vc=Vc, EI_ratio=(Ne,Ni), sens_evidence=stim_spikes, bg_spks=bg_spks, tstop=tstop, dt=dt, v_th=v_th, v_r=v_r)
 
     # plotting rates
     sum_spks_A = spktrains[:,:fNe].sum(axis=1) # sel for A
